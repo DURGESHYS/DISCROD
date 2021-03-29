@@ -1,0 +1,19 @@
+//-------------REQUIREMENTS---------------
+const db = require('quick.db');
+const Discord = require('discord.js');
+const client = Discord.Client;
+const { MessageEmbed } = require('discord.js');
+const Color = process.env.color;
+
+ module.exports = {
+    name: "",
+    hidden: false,
+    description: "",
+    usage: "",
+    category: "",
+    permissions: ["" || "ADMINISTRATOR"],
+    aliases: [""],
+    timeout: false,
+    run: async (client, message, args) => {
+}
+};
