@@ -1,7 +1,7 @@
 # Apps
 ## Google Authorization
     const ga =  new MessageEmbed()
-
+[![](https://cdn.discordapp.com/emojis/770290491731476500.png)](https://cdn.discordapp.com/emojis/770290491731476500.png) 
                 .setColor(`${Color}`)
 
                 .setFooter(`STAFFS APPS`, client.user.displayAvatarURL())
