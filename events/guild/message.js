@@ -1,17 +1,19 @@
 const Discord = require('discord.js');
+
 const Timeout = new Set();
+
 const db = require('quick.db');
 const { MessageEmbed } = require('discord.js');
 const config = require('../../botconfig.json');
-const colors = require('../../colors.json');
-
 const ms = require('ms');
 const client = Discord.Client;
 const default_prefix = config.DEFAULT_PREFIX;
-const owner = process.env.BOTOWNER;
+const owner = config.BOTOWNER;
 const Color = config.DEFAULT_COLOUR;
 const erroremo = config.ERROREMOJI;
 const sucessemo = config.SUCESSEMOJI;
+const arrowemo = config.ARROWEMOJI;
+const wrongemo = config.WRONGEMOJI;
 
 module.exports = async (bot, message) => {
 	if (message.author.bot || message.channel.type === 'dm') return;
@@ -19,46 +21,149 @@ module.exports = async (bot, message) => {
 	if (prefix === null) {
 		prefix = default_prefix;
 	}
-	let colour = db.get(`colour_${message.guild.id}`);
+	let colour = db.get(`colour`);
 
 	if (colour === null) {
 		colour = Color;
 	}
-	let erroremoji = db.get(`erroremoji_${message.guild.id}`);
+
+	let erroremoji = db.get(`erroremoji`);
 	if (erroremoji === null) {
 		erroremoji = erroremo;
 	}
-	let sucessemoji = db.get(`sucessemoji_${message.guild.id}`);
-
+	let wrongemoji = db.get(`wrongemoji`);
+	if (wrongemoji === null) {
+		wrongemoji = wrongemo;
+	}
+	let sucessemoji = db.get(`sucessemoji`);
 	if (sucessemoji === null) {
 		sucessemoji = sucessemo;
 	}
+	let arrowemoji = db.get(`arrowemoji`);
+	if (arrowemoji === null) {
+		arrowemoji = arrowemo;
+	}
 	let member = message.guild.member(message.author);
 	let nickname = member ? member.displayName : message.author.username;
-
-	if (message.content === `<@${bot.user.id}>`) {
-		if (message.guild.me.hasPermission('MANAGE_MESSAGES')) {
-			message.delete().catch(console.error);
-		}
+	const embed = new MessageEmbed();
+	if (!message.guild.me.hasPermission('ADMINISTRATOR')) {
 		return message.author
 			.send(
-				new Discord.MessageEmbed()
-					.setThumbnail(message.author.displayAvatarURL({ dynamic: true }))
-					.setColor(`${Color}`)
-					.setDescription(`My Prefix Is \**${prefix}\**`)
-					.setTitle(`\**${message.author.username}\**`)
-					.setFooter(`MYPREFIX`, bot.user.displayAvatarURL())
+				embed
+					.setColor(`${colour}`)
+					.setDescription(
+						`<a:ERROR:${erroremoji}>┊Please Give Me to \`Administor\` Permission`
+					)
+					.setAuthor(nickname, message.author.displayAvatarURL())
+					.setFooter(
+						`┊BOT┊ADMINISTOR┊PERMISSION┊  ${bot.user.username}`,
+						bot.user.displayAvatarURL()
+					)
 			)
 			.then(m => {
-				m.delete({ timeout: 45000 });
+				m.delete({ timeout: 60000 }).catch(() => undefined);
+			});
+	}
+	if (message.content === `<@${bot.user.id}>`) {
+		if (message.guild.me.hasPermission('MANAGE_MESSAGES')) {
+			message.delete().catch(() => undefined);
+		}
+		return message.channel
+			.send(
+				embed
+					.setColor(`${colour}`)
+					.setDescription(`<a:ARROW:${arrowemoji}>┊Bot Prefix Is \`${prefix}\``)
+					.setAuthor(nickname, message.author.displayAvatarURL())
+					.setFooter(
+						`┊BOT┊PREFIX┊  ${bot.user.username}`,
+						bot.user.displayAvatarURL()
+					)
+			)
+			.then(m => {
+				m.delete({ timeout: 60000 }).catch(() => undefined);
 			});
 	}
 	const escapeRegex = str => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 	const prefixRegex = new RegExp(
 		`^(<@!?${bot.user.id}>|${escapeRegex(prefix)})\\s*`
 	);
+	async function nitro() {
+		let msg = message.content;
+		let emojis = msg.match(/(?<=:)([^:\s]+)(?=:)/g);
+		if (!emojis) return;
 
-	if (!prefixRegex.test(message.content)) return;
+		emojis.forEach(m => {
+			let emoji = bot.emojis.cache.find(x => x.name === m);
+			if (!emoji) return;
+			let temp = emoji.toString();
+			if (new RegExp(temp, 'g').test(msg))
+				msg = msg.replace(new RegExp(temp, 'g'), emoji.toString());
+			else msg = msg.replace(new RegExp(':' + m + ':', 'g'), emoji.toString());
+		});
+		if (msg === message.content) return;
+
+		let everyonerole = message.guild.roles.cache.find(
+			r => r.name === '@everyone'
+		);
+		if (
+			!everyonerole.permissions.has('USE_EXTERNAL_EMOJIS' || 'ADMINISTRATOR')
+		) {
+			return message.channel
+				.send(
+					embed
+						.setColor(`${colour}`)
+						.setDescription(
+							`<a:ERROR:${erroremoji}>┊Please Give Everyone to \`Use External Emojis\` Permission.`
+						)
+						.setAuthor(nickname, message.author.displayAvatarURL())
+						.setFooter(
+							`┊EVERYONE┊PERMISSION┊  ${bot.user.username}`,
+							bot.user.displayAvatarURL()
+						)
+				)
+				.then(m => {
+					m.delete({ timeout: 60000 }).catch(() => undefined);
+				});
+		}
+
+		let webhook = await message.channel.fetchWebhooks();
+		let number = randomNumber(1, 2);
+		webhook = webhook.find(x => x.name === `${bot.user.username}` + number);
+
+		if (!webhook) {
+			webhook = await message.channel.createWebhook(
+				`${bot.user.username}` + number,
+				{
+					avatar: bot.user.displayAvatarURL({ dynamic: true })
+				}
+			);
+		}
+
+		await webhook.edit({
+			name: message.member.nickname
+				? message.member.nickname
+				: message.author.username,
+			avatar: message.author.displayAvatarURL({ dynamic: true })
+		});
+
+		message.delete().catch(err => {});
+		return webhook.send(msg).catch(err => {});
+
+		await webhook.edit({
+			name: `${bot.user.username}` + number,
+			avatar: bot.user.displayAvatarURL({ dynamic: true })
+		});
+	}
+	nitro();
+	function randomNumber(min, max) {
+		min = Math.ceil(min);
+		max = Math.floor(max);
+		return Math.floor(Math.random() * (max - min + 1)) + min;
+	}
+
+	if (!prefixRegex.test(message.content)) {
+		return;
+	}
 
 	const [, matchedPrefix] = message.content.match(prefixRegex);
 	const server = message.guild;
@@ -71,11 +176,171 @@ module.exports = async (bot, message) => {
 	const command =
 		bot.commands.get(cmd) ||
 		bot.commands.find(a => a.aliases && a.aliases.includes(cmd));
-
 	//    If cooldowns map doesn't have a command.name key then create one.
 	if (command) {
-		if (command.timeout) {
-			// Permission handler start from here
+		if (command.mod) {
+			let modrole = db.get(`modrole_${member.guild.id}`);
+			let adminrole = db.get(`adminrole_${member.guild.id}`);
+			if (modrole && adminrole === null) {
+				return message.channel
+					.send(
+						embed
+							.setAuthor(nickname, message.author.displayAvatarURL())
+							.setColor(`${colour}`)
+							.setDescription(
+								`<a:ERROR:${erroremoji}>┊Please Add Admin && Mod Role First.`
+							)
+							.setFooter(
+								`┊ADMIN && MOD┊ROLE┊  ${bot.user.username}`,
+								bot.user.displayAvatarURL()
+							)
+					)
+					.then(m => {
+						m.delete({ timeout: 60000 }).catch(() => undefined);
+					});
+			}
+			if (modrole === null) {
+				return message.channel
+					.send(
+						embed
+							.setAuthor(nickname, message.author.displayAvatarURL())
+							.setColor(`${colour}`)
+							.setDescription(
+								`<a:ERROR:${erroremoji}>┊Please Add Mod Role First.`
+							)
+							.setFooter(
+								`┊MOD┊ROLE┊  ${bot.user.username}`,
+								bot.user.displayAvatarURL()
+							)
+					)
+					.then(m => {
+						m.delete({ timeout: 60000 }).catch(() => undefined);
+					});
+			}
+			if (adminrole === null) {
+				return message.channel
+					.send(
+						embed
+							.setAuthor(nickname, message.author.displayAvatarURL())
+							.setColor(`${colour}`)
+							.setDescription(
+								`<a:ERROR:${erroremoji}>┊Please Add Admin Role First.`
+							)
+							.setFooter(
+								`┊ADMIN┊ROLE┊  ${bot.user.username}`,
+								bot.user.displayAvatarURL()
+							)
+					)
+					.then(m => {
+						m.delete({ timeout: 60000 }).catch(() => undefined);
+					});
+			}
+			if (
+				!message.member.roles.cache.has(`${modrole}`) ||
+				!message.member.roles.cache.has(`${adminrole}`) ||
+				!message.member.hasPermission('ADMINISTRATOR')
+			) {
+				return message.channel
+					.send(
+						embed
+							.setAuthor(nickname, message.author.displayAvatarURL())
+							.setColor(`${colour}`)
+							.setDescription(
+								`<a:ERROR:${erroremoji}>┊Required Mod Role For This Command.`
+							)
+							.setFooter(
+								`┊REQUIRE┊ROLE┊  ${bot.user.username}`,
+								bot.user.displayAvatarURL()
+							)
+					)
+					.then(m => {
+						m.delete({ timeout: 60000 }).catch(() => undefined);
+					});
+			}
+		}
+		if (command.admin) {
+			let adminrole = db.get(`adminrole_${member.guild.id}`);
+			if (adminrole === null) {
+				return message.channel
+					.send(
+						embed
+							.setAuthor(nickname, message.author.displayAvatarURL())
+							.setColor(`${colour}`)
+							.setDescription(
+								`<a:ERROR:${erroremoji}>┊Please Add Admin Role First.`
+							)
+							.setFooter(
+								`┊ADMIN┊ROLE┊  ${bot.user.username}`,
+								bot.user.displayAvatarURL()
+							)
+					)
+					.then(m => {
+						m.delete({ timeout: 60000 }).catch(() => undefined);
+					});
+			}
+			if (
+				!message.member.roles.cache.has(`${adminrole}`) ||
+				!message.member.hasPermission('ADMINISTRATOR')
+			) {
+				return message.channel
+					.send(
+						embed
+							.setAuthor(nickname, message.author.displayAvatarURL())
+							.setColor(`${colour}`)
+							.setDescription(
+								`<a:ERROR:${erroremoji}>┊Required Admin Role For This Command.`
+							)
+							.setFooter(
+								`┊REQUIRE┊ROLE┊  ${bot.user.username}`,
+								bot.user.displayAvatarURL()
+							)
+					)
+					.then(m => {
+						m.delete({ timeout: 60000 }).catch(() => undefined);
+					});
+			}
+		}
+		if (command.guildowner) {
+			if (message.author.id != message.guild.owner.id) {
+				return message.channel
+					.send(
+						embed
+							.setAuthor(nickname, message.author.displayAvatarURL())
+							.setColor(`${colour}`)
+							.setDescription(
+								`<a:ERROR:${erroremoji}>┊Only Guild Owner Can Use This Command.`
+							)
+							.setFooter(
+								`┊GUILD┊OWNER┊  ${bot.user.username}`,
+								bot.user.displayAvatarURL()
+							)
+					)
+					.then(m => {
+						m.delete({ timeout: 60000 }).catch(() => undefined);
+					});
+			}
+		}
+		if (command.owner) {
+			if (message.author.id != owner) {
+				return message.channel
+					.send(
+						embed
+							.setAuthor(nickname, message.author.displayAvatarURL())
+							.setColor(`${colour}`)
+							.setDescription(
+								`<a:ERROR:${erroremoji}>┊Only Bot Owner Can Use This Command.`
+							)
+							.setFooter(
+								`┊BOT┊OWNER┊  ${bot.user.username}`,
+								bot.user.displayAvatarURL()
+							)
+					)
+					.then(m => {
+						m.delete({ timeout: 60000 }).catch(() => undefined);
+					});
+			}
+		}
+		if (command.permissions) {
 			const validPermissions = [
 				'CREATE_INSTANT_INVITE',
 				'KICK_MEMBERS',
@@ -122,95 +387,75 @@ module.exports = async (bot, message) => {
 					}
 				}
 				if (invalidPerms.length) {
-					if (
-						message.guild.me.hasPermission('MANAGE_MESSAGES' || 'ADMINISTRATOR')
-					) {
-						message.delete().catch(console.error);
+					if (message.guild.me.hasPermission('ADMINISTRATOR')) {
+						message.delete().catch(() => undefined);
 					}
-					const embedpeeed = new MessageEmbed()
-						.setTitle(`\**${message.author.username}\**`)
-						.setThumbnail(message.author.displayAvatarURL())
-						.setColor(`${Color}`)
-						.setDescription(
-							`<a:ERROR:816671850804543509>REQUIRE PERMISSIONS: \**${invalidPerms}\** <a:NOPERMISSION:816664072858763284>`
+					let CommandName =
+						command.name.charAt(0).toUpperCase() + command.name.slice(1);
+					return message.channel
+						.send(
+							embed
+								.setAuthor(nickname, message.author.displayAvatarURL())
+								.setColor(`${colour}`)
+								.setDescription(
+									`<a:ERROR:${erroremoji}>┊Require Permissions for ${CommandName} Command:\n<a:ARROW:${arrowemoji}>┊\`${invalidPerms.join(
+										', '
+									)}\``
+								)
+								.setFooter(
+									`┊MEMBER┊PERMISSIONS┊  ${bot.user.username}`,
+									bot.user.displayAvatarURL()
+								)
 						)
-						.setFooter(`PERMISSION`, bot.user.displayAvatarURL());
-					return message.author.send(embedpeeed).then(m => {
-						m.delete({ timeout: 120000 });
-					});
+						.then(m => {
+							m.delete({ timeout: 60000 }).catch(() => undefined);
+						});
 				}
 			}
-
-			//------------BOT STARTS PERMISSION-----------
-			const botstartpermision = ['ADMINISTRATOR'];
-			if (botstartpermision.length) {
-				let invalidPerms = [];
-				for (const perm of botstartpermision) {
-					if (!botstartpermision.includes(perm)) {
-						return console.log(`Invalid Permissions ${perm}`);
-					}
-					if (!message.guild.me.hasPermission(perm)) {
-						invalidPerms.push(perm);
-					}
-				}
-				if (invalidPerms.length) {
-					if (
-						message.guild.me.hasPermission('MANAGE_MESSAGES' || 'ADMINISTRATOR')
-					) {
-						message.delete().catch(console.error);
-					}
-					const embedpeed = new MessageEmbed()
-						.setTitle(`\**${message.author.username}\**`)
-						.setThumbnail(message.author.displayAvatarURL())
-						.setColor(`${Color}`)
-						.setDescription(
-							`<a:ERROR:816671850804543509>REQUIRE START PERMISSIONS: \**${invalidPerms}\** <a:NOPERMISSION:816664072858763284>`
-						)
-						.setFooter(`STARTPERMISSION`, bot.user.displayAvatarURL());
-					return message.author.send(embedpeed).then(m => {
-						m.delete({ timeout: 120000 });
-					});
-				}
-			}
-			//-----------------BOT MEMBER PERMISSION END--------------
-
-			//Permission handler end here
-			//Cooldown start here
+		}
+		if (command.timeout) {
 			if (Timeout.has(`${message.author.id}${command.name}`)) {
-				if (
-					message.guild.me.hasPermission('MANAGE_MESSAGES' || 'ADMINISTRATOR')
-				) {
-					message.delete().catch(console.error);
+				if (message.guild.me.hasPermission('ADMINISTRATOR')) {
+					message.delete().catch(() => undefined);
 				}
-				const embedtime = new MessageEmbed()
-					.setColor(`${Color}`)
-					.setTitle(`\**${message.author.username}\**`)
-					.setThumbnail(message.author.displayAvatarURL())
-					.setDescription(
-						`<a:ERROR:816671850804543509>You can only use this command every **${ms(
-							command.timeout
-						)}!** <a:COOLDOWN:816664555575967764>`
+				let CommandName =
+					command.name.charAt(0).toUpperCase() + command.name.slice(1);
+				return message.channel
+					.send(
+						embed
+							.setAuthor(nickname, message.author.displayAvatarURL())
+							.setColor(`${colour}`)
+							.setDescription(
+								`<a:ERROR:${erroremoji}>┊You can only use \`${CommandName}\` command every \`${ms(
+									command.timeout
+								)}!\``
+							)
+							.setFooter(
+								`┊COMMAND┊COOLDOWN┊  ${bot.user.username}`,
+								bot.user.displayAvatarURL()
+							)
 					)
-					.setFooter(`COOLDOWN`, bot.user.displayAvatarURL());
-				return message.author.send(embedtime).then(m => {
-					m.delete({ timeout: 120000 });
-				});
+					.then(m => {
+						m.delete({ timeout: 120000 }).catch(() => undefined);
+					});
 			} else {
-				if (
-					message.guild.me.hasPermission('MANAGE_MESSAGES' || 'ADMINISTRATOR')
-				) {
-					message.delete().catch(console.error);
+				if (message.guild.me.hasPermission('ADMINISTRATOR')) {
+					message.delete().catch(() => undefined);
 				}
+				let commandname = command.name.toUpperCase();
 				command.run(
 					bot,
 					message,
 					args,
-					prefix,
 					colour,
+					commandname,
+					embed,
+					nickname,
+					prefix,
+					arrowemoji,
 					erroremoji,
 					sucessemoji,
-					nickname,
-					command
+					wrongemoji
 				);
 				Timeout.add(`${message.author.id}${command.name}`);
 				setTimeout(() => {
@@ -218,21 +463,23 @@ module.exports = async (bot, message) => {
 				}, command.timeout);
 			}
 		} else {
-			if (
-				message.guild.me.hasPermission('MANAGE_MESSAGES' || 'ADMINISTRATOR')
-			) {
-				message.delete().catch(console.error);
+			if (message.guild.me.hasPermission('ADMINISTRATOR')) {
+				message.delete().catch(() => undefined);
 			}
+			let commandname = command.name.toUpperCase();
 			command.run(
 				bot,
 				message,
 				args,
-				prefix,
 				colour,
-				sucessemoji,
-				erroremoji,
+				commandname,
+				embed,
 				nickname,
-				command
+				prefix,
+				arrowemoji,
+				erroremoji,
+				sucessemoji,
+				wrongemoji
 			);
 		}
 	}
